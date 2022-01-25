@@ -1,12 +1,14 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/pressly/goose"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
@@ -83,11 +85,9 @@ func OpenTestConnection() (db *gorm.DB, err error) {
 
 func RunMigrations() {
 	var err error
-	allModels := []interface{}{&User{}, &Account{}, &Pet{}, &Company{}, &Toy{}, &Language{}}
+	allModels := []interface{}{&Subscriber{}, &PhoneNumber{}, &Provider{}, &APIKey{}, &Tank{}, &OverflowProvider{}}
 	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(allModels), func(i, j int) { allModels[i], allModels[j] = allModels[j], allModels[i] })
-
-	DB.Migrator().DropTable("user_friends", "user_speaks")
 
 	if err = DB.Migrator().DropTable(allModels...); err != nil {
 		log.Printf("Failed to drop table, got error %v\n", err)
@@ -104,5 +104,24 @@ func RunMigrations() {
 			log.Printf("Failed to create table for %#v\n", m)
 			os.Exit(1)
 		}
+	}
+}
+
+func RunGooseMigrations(db *gorm.DB, dbName string) {
+	db = db.Exec(fmt.Sprintf("DROP DATABASE IF EXISTS %v", dbName))
+	db = db.Exec(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %v", dbName))
+	db = db.Exec(fmt.Sprintf("USE %v", dbName))
+	if err := goose.SetDialect("mysql"); err != nil {
+		panic(err)
+	}
+
+	sdb, err := db.DB()
+	if err != nil {
+		panic(err)
+	}
+
+	err = goose.Run("up", sdb, ".")
+	if err != nil {
+		panic(err)
 	}
 }
